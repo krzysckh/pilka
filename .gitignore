@@ -1,0 +1,4 @@
+*.o
+pilka
+*.~undo-tree~
+.gdb_history
