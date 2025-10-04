@@ -402,6 +402,7 @@ main(void)
   init_board(b);
 
 
+  while (!WindowShouldClose()) {
     BeginDrawing();
 
     ClearBackground(color_bg);
@@ -423,6 +424,7 @@ main(void)
     if (b->res == NONE) {
       if (b->plr == 0)
         maybe_get_proposed_point(b);
+        /* move_bot(b); */
       else
         move_bot(b);
     }
