@@ -329,10 +329,8 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
         alpha = score;
       }
     }
-    // TODO: why doesn't this work
-    if (score >= beta) {
+    if (score >= beta)
       break;
-    }
   }
   free(bc);
   *best_ = best;
@@ -403,15 +401,13 @@ main(void)
   memset(b, 0, sizeof(Board));
   init_board(b);
 
-  while (!WindowShouldClose()) {
+
     BeginDrawing();
 
     ClearBackground(color_bg);
-    for (i = 0; i < H; ++i) {
-      for (j = 0; j < W; ++j) {
+    for (i = 0; i < H; ++i)
+      for (j = 0; j < W; ++j)
         DrawCircle(j*PWIDTH, i*PHEIGHT, 2.f, color_fg);
-      }
-    }
 
     draw_points(b);
 
