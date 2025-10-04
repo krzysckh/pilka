@@ -329,8 +329,8 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
         alpha = score;
       }
     }
-    if (score >= beta)
-      break;
+    /* if (score >= beta) */
+    /*   break; */
   }
   free(bc);
   *best_ = best;
