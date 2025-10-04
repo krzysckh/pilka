@@ -304,7 +304,7 @@ eval(Board *b)
 float
 negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
 {
-  float max = -1.f/0.f, score;
+  float max = -1.f/0.f, score = 0;
   uint8_t moves[8], nm, i, best = 0, pwas = b->plr;
   Board *bc;
 
@@ -318,10 +318,9 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
     memcpy(bc, b, sizeof(Board));
     board_do_move(bc, moves[i]);
     if (pwas == bc->plr)
-      score = 1.f * negamax(bc, depth, beta, alpha, best_);
+      score = 1.f * negamax(bc, depth, alpha, beta, best_);
     else
       score = -1.f * negamax(bc, depth-1, -beta, -alpha, best_);
-    /* printf("found score %f\n", score); */
     if (score > max) {
       max = score;
       if (score > alpha) {
@@ -329,8 +328,8 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
         alpha = score;
       }
     }
-    /* if (score >= beta) */
-    /*   break; */
+    if (score >= beta)
+      break;
   }
   free(bc);
   *best_ = best;
