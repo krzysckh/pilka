@@ -1,4 +1,4 @@
-CFLAGS=-std=c89 -Wall -Wextra -ggdb -O2
+CFLAGS=-std=c99 -Wall -Wextra -O2
 LDFLAGS=-lraylib -lm
 
 OFILES=pilka.o

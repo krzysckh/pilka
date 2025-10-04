@@ -1,4 +1,3 @@
-#include <bits/stdint-uintn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,13 +7,7 @@
 #include <math.h>
 
 #include <raylib.h>
-
-#define inline __inline__
-/* c89, not sure if it works in all compilers
-   leave as "#define inline" on CCs that don't have that */
-#define RAYMATH_IMPLEMENTATION
 #include <raymath.h>
-#undef inline
 
 #define BU  ((uint8_t)(1))
 #define BR  ((uint8_t)(1<<1))
@@ -336,6 +329,7 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
         alpha = score;
       }
     }
+    // TODO: why doesn't this work
     /* if (score >= beta) { */
     /*   break; */
     /* } */
