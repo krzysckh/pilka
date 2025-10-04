@@ -330,9 +330,9 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
       }
     }
     // TODO: why doesn't this work
-    /* if (score >= beta) { */
-    /*   break; */
-    /* } */
+    if (score >= beta) {
+      break;
+    }
   }
   free(bc);
   *best_ = best;
@@ -344,7 +344,7 @@ void
 move_bot(Board *b)
 {
   uint8_t m = 0;
-  float ev = negamax(b, 2, -0/1.f, 0/1.f, &m);
+  float ev = negamax(b, 2, -1/0.f, 1/0.f, &m);
   uint8_t x = b->x, y = b->y;
   mask_to_point(m, &x, &y);
   board_do_move(b, m);
