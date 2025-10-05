@@ -4,7 +4,6 @@
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
-#include <math.h>
 
 #include <raylib.h>
 #include <raymath.h>
@@ -302,7 +301,7 @@ eval(Board *b)
 
 /* requires *best to be 0 in the beginning */
 float
-negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
+negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *best_)
 {
   float max = -1.f/0.f, score;
   uint8_t moves[8], nm, i, best = 0, pwas = b->plr;
@@ -310,7 +309,7 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
 
   nm = get_legal_moves(b, moves);
   *best_ = best = moves[0];
-  if (depth == 0) return eval(b);
+  if (depth == 0 || absdepth == 0) return eval(b);
 
   bc = malloc(sizeof(Board));
 
@@ -318,9 +317,9 @@ negamax(Board *b, int depth, float alpha, float beta, uint8_t *best_)
     memcpy(bc, b, sizeof(Board));
     board_do_move(bc, moves[i]);
     if (pwas == bc->plr)
-      score = 1.f * negamax(bc, depth, beta, alpha, best_);
+      score = 1.f * negamax(bc, absdepth-1, depth, beta, alpha, best_);
     else
-      score = -1.f * negamax(bc, depth-1, -beta, -alpha, best_);
+      score = -1.f * negamax(bc, absdepth-1, depth-1, -beta, -alpha, best_);
     /* printf("found score %f\n", score); */
     if (score > max) {
       max = score;
@@ -342,7 +341,7 @@ void
 move_bot(Board *b)
 {
   uint8_t m = 0;
-  float ev = negamax(b, 2, -1/0.f, 1/0.f, &m);
+  float ev = negamax(b, 0xffff, 2, -1/0.f, 1/0.f, &m);
   uint8_t x = b->x, y = b->y;
   mask_to_point(m, &x, &y);
   board_do_move(b, m);
@@ -390,6 +389,7 @@ int
 main(void)
 {
   int i, j;
+  uint8_t xwas, ywas, tmp[8], nmoves;
   Board *b = malloc(sizeof(Board));
 
   srand(time(0));
@@ -400,9 +400,15 @@ main(void)
  beg:
   memset(b, 0, sizeof(Board));
   init_board(b);
-
+  xwas = 255, ywas = 255; /* not even on the board */
 
   while (!WindowShouldClose()) {
+    if (xwas != b->x || ywas != b->y) {
+      printf("updating nmoves\n");
+      nmoves = get_legal_moves(b, tmp);
+      xwas = b->x, ywas = b->y;
+    }
+
     BeginDrawing();
 
     ClearBackground(color_bg);
@@ -417,6 +423,8 @@ main(void)
     DrawRectangle(0, 11*PHEIGHT, 3*PWIDTH, PHEIGHT, color_bg);
     DrawRectangle(5*PWIDTH, 11*PHEIGHT, 3*PWIDTH, PHEIGHT, color_bg);
     DrawRectangle(8*PWIDTH, 0, PWIDTH, 12*PHEIGHT, color_bg);
+
+    DrawText(TextFormat("Possible moves: %d", nmoves), 0, 0, 8, color_fg);
 
     DrawCircle(b->x*PWIDTH, b->y*PHEIGHT, 5.f, b->plr ? color_p2 : color_p1);
 
