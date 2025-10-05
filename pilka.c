@@ -8,6 +8,9 @@
 #include <raylib.h>
 #include <raymath.h>
 
+#define ABSDEPTH 0xff
+#define DEPTH    2
+
 #define BU  ((uint8_t)(1))
 #define BR  ((uint8_t)(1<<1))
 #define BD  ((uint8_t)(1<<2))
@@ -340,7 +343,7 @@ void
 move_bot(Board *b)
 {
   uint8_t m = 0;
-  float ev = negamax(b, 0xffff, 2, -1/0.f, 1/0.f, &m);
+  float ev = negamax(b, ABSDEPTH, DEPTH, -1/0.f, 1/0.f, &m);
   uint8_t x = b->x, y = b->y;
   mask_to_point(m, &x, &y);
   board_do_move(b, m);
