@@ -28,6 +28,13 @@
 #define AT(b, x, y) (b->pt[((y)*W)+(x)])
 
 typedef enum {
+  PL_VS_BOT        = 0,
+  BOT_VS_PL        = 1,
+  BOT_VS_BOT       = 2,
+  BOT_VS_BOT_SLOW  = 3
+} Mode;
+
+typedef enum {
   WIN_P1 = 0, /* same as b->plr */
   WIN_P2 = 1, /* there's no such thing as a draw */
   NONE   = 2,
@@ -250,6 +257,9 @@ board_do_move(Board *b, uint8_t mask, uint8_t silentp)
   uint8_t nx = b->x, ny = b->y, chplr = 0;
   mask_to_point(mask, &nx, &ny);
 
+  if (b->res != NONE)
+    return 0;
+
   if (legalp(AT(b, b->x, b->y), AT(b, nx, ny), mask)) {
     AT(b, b->x, b->y).mask |= mask;
     b->x = nx, b->y = ny;
@@ -299,6 +309,7 @@ static float
 eval(Board *b)
 {
   float f = (b->plr ? b->y : 12-b->y)*100;
+  /* TODO: add option for "defensive" bot. for f=0 it will just "not lose" */
   if (b->res != NONE) {
     if (b->plr == b->res) f = 1.f/0.f;
     if (b->plr != b->res) f = -1.f/0.f;
@@ -319,7 +330,7 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *bes
 
   nm = get_legal_moves(b, moves);
   *best_ = best = moves[0];
-  if (depth == 0 || absdepth == 0) return eval(b);
+  if (b->res != NONE || depth == 0 || absdepth == 0) return eval(b);
 
   bc = malloc(sizeof(Board));
 
@@ -522,9 +533,10 @@ main(int argc, char **argv)
   uint8_t xwas, ywas, tmp[8], nmoves, Fflag = 60;
   char c;
   Board *b = malloc(sizeof(Board));
+  Mode mflag = PL_VS_BOT;
 
   argv0 = *argv;
-  while ((c = getopt(argc, argv, "hiF:d:D:")) != -1) {
+  while ((c = getopt(argc, argv, "hiF:d:D:m:")) != -1) {
     switch (c) {
     case 'F':
       Fflag = atoi(optarg);
@@ -537,6 +549,9 @@ main(int argc, char **argv)
       break;
     case 'i':
       iflag = 1;
+      break;
+    case 'm':
+      mflag = atoi(optarg);
       break;
     case 'h': /* fallthrough */
     default:
@@ -581,13 +596,25 @@ main(int argc, char **argv)
 
     DrawCircle(b->x*PWIDTH, b->y*PHEIGHT, 5.f, b->plr ? color_p2 : color_p1);
 
-        /* maybe_get_proposed_point(b); */
-    if (b->res == NONE) {
-      if (b->plr == 0)
-        maybe_get_proposed_point(b);
-        /* move_bot(b); */
-      else
+    switch (mflag) {
+    case PL_VS_BOT:
+    case BOT_VS_PL:
+      if (b->res == NONE) {
+        if (b->plr == mflag)
+          maybe_get_proposed_point(b);
+        else
+          move_bot(b);
+      }
+      break;
+    case BOT_VS_BOT:
+      move_bot(b);
+      break;
+    case BOT_VS_BOT_SLOW:
+      if (IsKeyPressed(KEY_ENTER))
         move_bot(b);
+      break;
+    default:
+      errx(1, "Unknown mode: %d.", mflag);
     }
 
     EndDrawing();
