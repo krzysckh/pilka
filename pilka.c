@@ -4,11 +4,13 @@
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
+#include <err.h>
+#include <errno.h>
 
 #include <raylib.h>
 #include <raymath.h>
 
-#define ABSDEPTH 0xff
+#define ABSDEPTH 64
 #define DEPTH    2
 
 #define BU  ((uint8_t)(1))
@@ -44,13 +46,13 @@ typedef struct {
   uint8_t plr; /* 0 | 1 */
 } Board;
 
-Color color_bg     = (Color){0x22, 0x22, 0x22, 0xff};
-Color color_fg     = (Color){0xde, 0xde, 0xde, 0xff};
-Color color_fg_dim = (Color){0x66, 0x66, 0x66, 0xbb};
-Color color_p1     = (Color){0xee, 0x88, 0x88, 0xff};
-Color color_p2     = (Color){0x88, 0xee, 0x88, 0xff};
+static Color color_bg     = (Color){0x22, 0x22, 0x22, 0xff};
+static Color color_fg     = (Color){0xde, 0xde, 0xde, 0xff};
+static Color color_fg_dim = (Color){0x66, 0x66, 0x66, 0xbb};
+static Color color_p1     = (Color){0xee, 0x88, 0x88, 0xff};
+static Color color_p2     = (Color){0x88, 0xee, 0x88, 0xff};
 
-uint8_t wins[8][2] = {
+static uint8_t wins[8][2] = {
   {3,  0}, {4,  0}, {5,  0},
   {3, 12}, {4, 12}, {5, 12},
 };
@@ -130,25 +132,25 @@ init_board(Board *b)
   DrawLineEx((Vector2){(fromx)*PWIDTH, (fromy)*PHEIGHT},        \
              (Vector2){(tox)*PWIDTH,   (toy)*PHEIGHT}, 3.f, color_fg_dim)
 
-__attribute__((unused)) void
+__attribute__((unused)) static void
 draw_pt_border(int a, int b, int c, int d)
 {
   BORDER(a, b, c, d);
 }
 
-__attribute__((unused)) void
+__attribute__((unused)) static void
 draw_pt_hist(int a, int b, int c, int d)
 {
   HIST(a, b, c, d);
 }
 
-void
+static void
 draw_pt_propose(int a, int b, int c, int d)
 {
   PROPOSE(a, b, c, d);
 }
 
-void
+static void
 mask_to_point(uint8_t mask, uint8_t *x, uint8_t *y)
 {
   if (mask & BR)  ++*x;
@@ -162,7 +164,7 @@ mask_to_point(uint8_t mask, uint8_t *x, uint8_t *y)
 }
 
 /* This does not work if a mask covers more than 1 point */
-void
+static void
 draw_point_apply(void (*f)(int, int, int, int), uint8_t mask, uint8_t x, uint8_t y)
 {
   uint8_t newx = x, newy = y;
@@ -171,7 +173,7 @@ draw_point_apply(void (*f)(int, int, int, int), uint8_t mask, uint8_t x, uint8_t
     f(x, y, newx, newy);
 }
 
-void
+static void
 draw_point(Board *b, int x, int y)
 {
   if (AT(b, x, y).mask & BR)  HIST(x, y, x+1, y);
@@ -190,7 +192,7 @@ draw_point(Board *b, int x, int y)
 
 }
 
-void
+static void
 draw_points(Board *b)
 {
   int i, j;
@@ -199,7 +201,7 @@ draw_points(Board *b)
       draw_point(b, j, i);
 }
 
-uint8_t
+static uint8_t
 rmask(uint8_t mask)
 {
   uint8_t res = 0;
@@ -215,7 +217,7 @@ rmask(uint8_t mask)
   return res;
 }
 
-uint8_t
+static uint8_t
 legalp(Point from, Point to, uint8_t mask)
 {
   if (mask&from.mask) return 0;
@@ -223,7 +225,7 @@ legalp(Point from, Point to, uint8_t mask)
   return 1;
 }
 
-uint8_t
+static uint8_t
 legalp2(Board *b, uint8_t mask)
 {
   uint8_t x = b->x, y = b->y;
@@ -236,11 +238,11 @@ legalp2(Board *b, uint8_t mask)
 }
 
 
-void check_result(Board *b);
+static void check_result(Board *b, uint8_t silentp);
 
 /* returns 1 if move was legal & made */
-uint8_t
-board_do_move(Board *b, uint8_t mask)
+static uint8_t
+board_do_move(Board *b, uint8_t mask, uint8_t silentp)
 {
   uint8_t nx = b->x, ny = b->y, chplr = 0;
   mask_to_point(mask, &nx, &ny);
@@ -250,14 +252,14 @@ board_do_move(Board *b, uint8_t mask)
     b->x = nx, b->y = ny;
     if (!AT(b, b->x, b->y).mask) chplr = 1;
     AT(b, b->x, b->y).mask |= rmask(mask);
-    check_result(b);
+    check_result(b, silentp);
     if (chplr) b->plr = !b->plr;
     return 1;
   }
   return 0;
 }
 
-void
+static void
 maybe_get_proposed_point(Board *b)
 {
   float ang = Vector2LineAngle((Vector2){b->x*PWIDTH, b->y*PHEIGHT}, GetMousePosition())+PI;
@@ -273,7 +275,7 @@ maybe_get_proposed_point(Board *b)
   draw_point_apply(draw_pt_propose, prop, b->x, b->y);
 
   if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-    board_do_move(b, prop);
+    board_do_move(b, prop, 0);
 }
 
 uint8_t
@@ -290,7 +292,7 @@ get_legal_moves(Board *b, uint8_t moves[8])
   return j;
 }
 
-float
+static float
 eval(Board *b)
 {
   float f = (b->plr ? b->y : 12-b->y)*100;
@@ -303,12 +305,14 @@ eval(Board *b)
 }
 
 /* requires *best to be 0 in the beginning */
-float
+static float
 negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *best_)
 {
   float max = -1.f/0.f, score = 0;
   uint8_t moves[8], nm, i, best = 0, pwas = b->plr;
   Board *bc;
+
+  /* printf("absdepth=%d\n", absdepth); */
 
   nm = get_legal_moves(b, moves);
   *best_ = best = moves[0];
@@ -318,7 +322,7 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *bes
 
   for (i = 0; i < nm; ++i) {
     memcpy(bc, b, sizeof(Board));
-    board_do_move(bc, moves[i]);
+    board_do_move(bc, moves[i], 1);
     if (pwas == bc->plr)
       score = 1.f * negamax(bc, absdepth-1, depth, alpha, beta, best_);
     else
@@ -339,14 +343,14 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *bes
   return max;
 }
 
-void
+static void
 move_bot(Board *b)
 {
   uint8_t m = 0;
   float ev = negamax(b, ABSDEPTH, DEPTH, -1/0.f, 1/0.f, &m);
   uint8_t x = b->x, y = b->y;
   mask_to_point(m, &x, &y);
-  board_do_move(b, m);
+  board_do_move(b, m, 0);
   /* uint8_t moves[8], nm; */
   /* nm = get_legal_moves(b, moves); */
   /* if (nm == 0) */
@@ -356,17 +360,17 @@ move_bot(Board *b)
   /* } */
 }
 
-void
+static void
 show_result(Board *b)
 {
-  /* if (b->res == WIN_P1) */
-  /*   puts("P1 won."); */
-  /* if (b->res == WIN_P2) */
-  /*   puts("P2 won."); */
+  if (b->res == WIN_P1)
+    puts("P1 won.");
+  if (b->res == WIN_P2)
+    puts("P2 won.");
 }
 
-void
-check_result(Board *b)
+static void
+check_result(Board *b, uint8_t silentp)
 {
   uint8_t moves[8];
   uint8_t nm = get_legal_moves(b, moves);
@@ -384,7 +388,102 @@ check_result(Board *b)
 
   return;
  fin:
-  show_result(b);
+  if (!silentp)
+    show_result(b);
+}
+
+/* FILE FORMAT:
+
+   header part:
+     BOARD%Wx%H\n
+   where
+     %W is the width
+     %H is the height
+   configuration part:
+     %k=%v\n
+     %k=%v\n
+     ...
+   where
+     %k is a key, one of
+       - res — game result
+       - x   — current player x
+       - y   — current player y
+       - plr — current player
+     %v is a value, an at most unsigned 8-bit integer
+   points part:
+     POINTS\n%b%m%b%m...
+   where
+     points are inserted row by row, every one consisting of:
+       - %b — 8-bit integer specifying borders that are at given point
+       - %m — 8-bit integer specifying mask of given point
+     there are W*H points
+*/
+
+void
+dump_board(Board *b, FILE *out)
+{
+  int i, j;
+  fprintf(out, "BOARD%dx%d\n", W, H);
+  fprintf(out, "res=%d\n", b->res);
+  fprintf(out, "x=%d\n", b->x);
+  fprintf(out, "y=%d\n", b->y);
+  fprintf(out, "plr=%d\n", b->plr);
+  fprintf(out, "POINTS=\n");
+  for (i = 0; i < H; ++i)
+    for (j = 0; j < W; ++j) {
+      fputc(AT(b, j, i).borderp, out);
+      fputc(AT(b, j, i).mask, out);
+    }
+}
+
+void
+dump_board_to(Board *b, char *filename)
+{
+  FILE *fp = fopen(filename, "w");
+  if (!fp) err(errno, "Couldn't open %s", filename);
+  dump_board(b, fp);
+  fclose(fp);
+
+  fprintf(stderr, "INFO: Dumped current board to %s\n", filename);
+}
+
+#define fscanf_expect(n, ...) do { if (fscanf(__VA_ARGS__) != (n)) errx(1, "Invalid format."); } while (0);
+
+/* TODO: hack, unsafe. 64-byte sized buffer is A-OK with correct inputs. will overflow with incorrect inputs. */
+void
+load_board(Board *b, FILE *in)
+{
+  int i, j, _W, _H, value; /* value will be &0xff */
+  char key[64] = {0};
+  fscanf_expect(2, in, "BOARD%dx%d\n", &_W, &_H);
+  if (_W != W || _H != H)
+    errx(1, "Unsupported board sized %dx%d", _W, _H);
+  while (fscanf(in, "%63[^=]=%d\n", key, &value) == 2) {
+    if (strcmp(key, "res") == 0) b->res = value;
+    else if (strcmp(key, "x") == 0)   b->x   = value;
+    else if (strcmp(key, "y") == 0)   b->y   = value;
+    else if (strcmp(key, "plr") == 0) b->plr = value;
+    else errx(1, "Invalid format. Unknown key: %s", key);
+  }
+  if (strcmp(key, "POINTS") == 0) {
+    for (i = 0; i < H; ++i)
+      for (j = 0; j < W; ++j) {
+        AT(b, j, i).borderp = fgetc(in);
+        AT(b, j, i).mask = fgetc(in);
+      }
+  } else
+    errx(1, "Invalid format. Expected POINTS.");
+}
+
+void
+load_board_from(Board *b, char *filename)
+{
+  FILE *fp = fopen(filename, "r");
+  if (!fp) err(errno, "Couldn't open %s", filename);
+  load_board(b, fp);
+  fclose(fp);
+
+  fprintf(stderr, "INFO: Loaded %s\n", filename);
 }
 
 int
@@ -405,11 +504,8 @@ main(void)
   xwas = 255, ywas = 255; /* not even on the board */
 
   while (!WindowShouldClose()) {
-    if (xwas != b->x || ywas != b->y) {
-      printf("updating nmoves\n");
-      nmoves = get_legal_moves(b, tmp);
-      xwas = b->x, ywas = b->y;
-    }
+    if (xwas != b->x || ywas != b->y)
+      nmoves = get_legal_moves(b, tmp), xwas = b->x, ywas = b->y;
 
     BeginDrawing();
 
@@ -441,10 +537,10 @@ main(void)
 
     EndDrawing();
 
-    if (IsKeyPressed(KEY_Q))
-      CloseWindow();
-    if (IsKeyPressed(KEY_R))
-      goto beg;
+    if (IsKeyPressed(KEY_Q)) CloseWindow();
+    if (IsKeyPressed(KEY_R)) goto beg;
+    if (IsKeyPressed(KEY_D)) dump_board_to(b, "last.brd");
+    if (IsKeyPressed(KEY_L)) load_board_from(b, "last.brd");
   }
 
   return 0;
