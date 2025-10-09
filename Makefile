@@ -1,4 +1,4 @@
-CFLAGS=-std=c99 -Wall -Wextra -O2
+CFLAGS=-std=c99 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=2
 LDFLAGS=-lraylib -lm
 
 OFILES=pilka.o

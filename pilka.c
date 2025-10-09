@@ -6,12 +6,10 @@
 #include <time.h>
 #include <err.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <raylib.h>
 #include <raymath.h>
-
-#define ABSDEPTH 64
-#define DEPTH    2
 
 #define BU  ((uint8_t)(1))
 #define BR  ((uint8_t)(1<<1))
@@ -45,6 +43,11 @@ typedef struct {
   uint8_t x, y; /* player (x y) */
   uint8_t plr; /* 0 | 1 */
 } Board;
+
+static char   *argv0    = NULL;
+static uint8_t iflag    = 0;
+static int     ABSDEPTH = 64;
+static int     DEPTH    =  2;
 
 static Color color_bg     = (Color){0x22, 0x22, 0x22, 0xff};
 static Color color_fg     = (Color){0xde, 0xde, 0xde, 0xff};
@@ -297,8 +300,8 @@ eval(Board *b)
 {
   float f = (b->plr ? b->y : 12-b->y)*100;
   if (b->res != NONE) {
-    if (b->plr == b->res) f = 1000000.f;
-    if (b->plr != b->res) f = -1000000.f;
+    if (b->plr == b->res) f = 1.f/0.f;
+    if (b->plr != b->res) f = -1.f/0.f;
   }
 
   return f;
@@ -343,11 +346,30 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *bes
   return max;
 }
 
+
+static float
+incremental_negamax(Board *b, int max_absdepth, int maxdepth, uint8_t *m)
+{
+  int i;
+  float ev = -1.f/0.f;
+  for (i = 1; i <= max_absdepth; ++i) {
+    ev = negamax(b, i, DEPTH, -1.f/0.f, 1.f/0.f, m);
+    if (ev == 1.f/0.f)
+      return ev;
+  }
+
+  return ev;
+}
+
 static void
 move_bot(Board *b)
 {
   uint8_t m = 0;
-  float ev = negamax(b, ABSDEPTH, DEPTH, -1/0.f, 1/0.f, &m);
+  float ev;
+  if (iflag)
+    ev = incremental_negamax(b, ABSDEPTH, DEPTH, &m);
+  else
+    ev = negamax(b, ABSDEPTH, DEPTH, -1.f/0.f, 1.f/0.f, &m);
   uint8_t x = b->x, y = b->y;
   mask_to_point(m, &x, &y);
   board_do_move(b, m, 0);
@@ -486,22 +508,55 @@ load_board_from(Board *b, char *filename)
   fprintf(stderr, "INFO: Loaded %s\n", filename);
 }
 
+__attribute__((noreturn)) static void
+usage(void)
+{
+  fprintf(stderr, "usage: %s [-hi] [-F targetfps] [-d depth] [-D absdepth] [file]\n", argv0);
+  exit(1);
+}
+
 int
-main(void)
+main(int argc, char **argv)
 {
   int i, j;
-  uint8_t xwas, ywas, tmp[8], nmoves;
+  uint8_t xwas, ywas, tmp[8], nmoves, Fflag = 60;
+  char c;
   Board *b = malloc(sizeof(Board));
+
+  argv0 = *argv;
+  while ((c = getopt(argc, argv, "hiF:d:D:")) != -1) {
+    switch (c) {
+    case 'F':
+      Fflag = atoi(optarg);
+      break;
+    case 'd':
+      DEPTH = atoi(optarg);
+      break;
+    case 'D':
+      ABSDEPTH = atoi(optarg);
+      break;
+    case 'i':
+      iflag = 1;
+      break;
+    case 'h': /* fallthrough */
+    default:
+        usage();
+    }
+  }
 
   srand(time(0));
 
   InitWindow(PWIDTH*(W-1), PHEIGHT*(H-1), "pilka");
-  /*SetTargetFPS(60);*/
+  SetTargetFPS(Fflag);
 
  beg:
-  memset(b, 0, sizeof(Board));
-  init_board(b);
-  xwas = 255, ywas = 255; /* not even on the board */
+  if (argv[optind])
+    load_board_from(b, argv[optind]);
+  else {
+    memset(b, 0, sizeof(Board));
+    init_board(b);
+    xwas = 255, ywas = 255; /* not even on the board */
+  }
 
   while (!WindowShouldClose()) {
     if (xwas != b->x || ywas != b->y)
