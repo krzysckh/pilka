@@ -1,1 +1,8 @@
-piłka
+piłka - paper soccer
+
+keybindings:
+  q - exit
+  r - restart
+  d - dump board to "last.brd"
+  l - load board from "last.brd"
+  b - move bot during player turn

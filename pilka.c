@@ -623,6 +623,7 @@ main(int argc, char **argv)
     if (IsKeyPressed(KEY_R)) goto beg;
     if (IsKeyPressed(KEY_D)) dump_board_to(b, "last.brd");
     if (IsKeyPressed(KEY_L)) load_board_from(b, "last.brd");
+    if (IsKeyPressed(KEY_B)) move_bot(b);
   }
 
   return 0;
