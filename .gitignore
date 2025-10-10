@@ -3,3 +3,5 @@ pilka
 *.~undo-tree~
 .gdb_history
 *.brd
+*.a
+*.exe

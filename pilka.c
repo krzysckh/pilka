@@ -4,12 +4,19 @@
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
-#include <err.h>
 #include <errno.h>
 #include <unistd.h>
 
 #include <raylib.h>
 #include <raymath.h>
+
+#ifndef _WIN32
+#include <err.h>
+#else
+#define errx(n, ...) do { fprintf(stderr, __VA_ARGS__); exit(n); } while (0);
+#define err(...) errx(__VA_ARGS__)
+#endif
+
 
 #define BU  ((uint8_t)(1))
 #define BR  ((uint8_t)(1<<1))
@@ -530,7 +537,7 @@ int
 main(int argc, char **argv)
 {
   int i, j;
-  uint8_t xwas, ywas, tmp[8], nmoves, Fflag = 60;
+  uint8_t xwas, ywas, tmp[8], nmoves = 0, Fflag = 60;
   char c;
   Board *b = malloc(sizeof(Board));
   Mode mflag = PL_VS_BOT;
@@ -565,12 +572,12 @@ main(int argc, char **argv)
   SetTargetFPS(Fflag);
 
  beg:
+  xwas = 255, ywas = 255; /* not even on the board */
   if (argv[optind])
     load_board_from(b, argv[optind]);
   else {
     memset(b, 0, sizeof(Board));
     init_board(b);
-    xwas = 255, ywas = 255; /* not even on the board */
   }
 
   while (!WindowShouldClose()) {
