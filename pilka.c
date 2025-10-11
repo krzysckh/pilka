@@ -12,9 +12,11 @@
 
 #ifndef _WIN32
 #include <err.h>
+#include <alloca.h>
 #else
-#define errx(n, ...) do { fprintf(stderr, __VA_ARGS__); exit(n); } while (0);
-#define err(...) errx(__VA_ARGS__)
+#define errx(n, ...) do { fprintf(stderr, __VA_ARGS__); exit(n); } while (0)
+#define err(...)     errx(__VA_ARGS__)
+#define warnx(...)   fprintf(stderr, __VA_ARGS__)
 #endif
 
 
@@ -60,6 +62,7 @@ typedef struct {
 
 static char   *argv0    = NULL;
 static uint8_t iflag    = 0;
+static Mode    mflag    = PL_VS_BOT;
 static int     ABSDEPTH = 64;
 static int     DEPTH    =  2;
 
@@ -312,31 +315,32 @@ get_legal_moves(Board *b, uint8_t moves[8])
   return j;
 }
 
+#define WHO(b) ((b)->plr?1.f:-1.f)
+
 static float
 eval(Board *b)
 {
-  float f = (b->plr ? b->y : 12-b->y)*100;
-  /* TODO: add option for "defensive" bot. for f=0 it will just "not lose" */
   if (b->res != NONE) {
-    if (b->plr == b->res) f = 1.f/0.f;
-    if (b->plr != b->res) f = -1.f/0.f;
+    if (b->res == b->plr)
+      return 1.f/0.f;
+    else
+      return -1.f/0.f;
   }
 
-  return f;
+  /* TODO: add option for "defensive" bot. for f=0 it will just "not lose" */
+  return (mflag == BOT_VS_PL ? 12-b->y : b->y)*WHO(b);
 }
 
 /* requires *best to be 0 in the beginning */
 static float
-negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *best_)
+negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *mq)
 {
   float max = -1.f/0.f, score = 0;
-  uint8_t moves[8], nm, i, best = 0, pwas = b->plr;
+  uint8_t moves[8], nm, i, best = 0, pwas = b->plr, *mqprim = alloca(absdepth);
   Board *bc;
 
-  /* printf("absdepth=%d\n", absdepth); */
-
   nm = get_legal_moves(b, moves);
-  *best_ = best = moves[0];
+  best = moves[0];
   if (b->res != NONE || depth == 0 || absdepth == 0) return eval(b);
 
   bc = malloc(sizeof(Board));
@@ -345,12 +349,18 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *bes
     memcpy(bc, b, sizeof(Board));
     board_do_move(bc, moves[i], 1);
     if (pwas == bc->plr)
-      score = 1.f * negamax(bc, absdepth-1, depth, alpha, beta, best_);
+      score = 1.f * negamax(bc, absdepth-1, depth, alpha, beta, mqprim);
     else
-      score = -1.f * negamax(bc, absdepth-1, depth-1, -beta, -alpha, best_);
+      score = -1.f * negamax(bc, absdepth-1, depth-1, -beta, -alpha, NULL);
+    if (i == 0) /* copy first mq to have at least one possible scenario ready.
+                   this is needed if a move will have lose the game */
+      if (mq)
+        memcpy(mq+1, mqprim, absdepth-1);
     if (score > max) {
       max = score;
       if (score > alpha) {
+        if (mq)
+          memcpy(mq+1, mqprim, absdepth-1);
         best = moves[i];
         alpha = score;
       }
@@ -359,7 +369,8 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *bes
       break;
   }
   free(bc);
-  *best_ = best;
+
+  if (mq) *mq = best;
   /* printf("returning move: %d with score %f\n", *best_, max); */
   return max;
 }
@@ -372,6 +383,7 @@ incremental_negamax(Board *b, int max_absdepth, int maxdepth, uint8_t *m)
   float ev = -1.f/0.f;
   for (i = 1; i <= max_absdepth; ++i) {
     ev = negamax(b, i, DEPTH, -1.f/0.f, 1.f/0.f, m);
+    printf("ev %d: %f\n", i, ev);
     if (ev == 1.f/0.f)
       return ev;
   }
@@ -382,15 +394,19 @@ incremental_negamax(Board *b, int max_absdepth, int maxdepth, uint8_t *m)
 static void
 move_bot(Board *b)
 {
-  uint8_t m = 0;
+  uint8_t *mq = alloca(ABSDEPTH), plr = b->plr;
+  size_t i = ABSDEPTH;
   float ev;
   if (iflag)
-    ev = incremental_negamax(b, ABSDEPTH, DEPTH, &m);
+    ev = incremental_negamax(b, ABSDEPTH, DEPTH, mq);
   else
-    ev = negamax(b, ABSDEPTH, DEPTH, -1.f/0.f, 1.f/0.f, &m);
-  uint8_t x = b->x, y = b->y;
-  mask_to_point(m, &x, &y);
-  board_do_move(b, m, 0);
+    ev = negamax(b, ABSDEPTH, DEPTH, -1.f/0.f, 1.f/0.f, mq);
+  while (plr == b->plr && b->res == NONE && i > 0) {
+    if (!board_do_move(b, *mq, 0))
+      warnx("Tried to make illegal move %d.", *mq);
+    mq++, i--;
+  }
+  printf("Evaluation: %f\n", ev);
   /* uint8_t moves[8], nm; */
   /* nm = get_legal_moves(b, moves); */
   /* if (nm == 0) */
@@ -422,7 +438,10 @@ check_result(Board *b, uint8_t silentp)
   }
   for (i = 0; i < 6; ++i)
     if (b->x == wins[i][0] && b->y == wins[i][1]) {
-      b->res = wins[i][1] == 12 ? WIN_P2 : WIN_P1;
+      if (mflag == BOT_VS_PL)
+        b->res = wins[i][1] == 12 ? WIN_P1 : WIN_P2;
+      else
+        b->res = wins[i][1] == 12 ? WIN_P2 : WIN_P1;
       goto fin;
     }
 
@@ -451,7 +470,7 @@ check_result(Board *b, uint8_t silentp)
        - plr — current player
      %v is a value, an at most unsigned 8-bit integer
    points part:
-     POINTS\n%b%m%b%m...
+     POINTS=\n%b%m%b%m...
    where
      points are inserted row by row, every one consisting of:
        - %b — 8-bit integer specifying borders that are at given point
@@ -540,7 +559,6 @@ main(int argc, char **argv)
   uint8_t xwas, ywas, tmp[8], nmoves = 0, Fflag = 60;
   char c;
   Board *b = malloc(sizeof(Board));
-  Mode mflag = PL_VS_BOT;
 
   argv0 = *argv;
   while ((c = getopt(argc, argv, "hiF:d:D:m:")) != -1) {
@@ -633,5 +651,6 @@ main(int argc, char **argv)
     if (IsKeyPressed(KEY_B)) move_bot(b);
   }
 
+  free(b);
   return 0;
 }

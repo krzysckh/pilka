@@ -1,5 +1,5 @@
-CFLAGS=-std=c99 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=2
-LDFLAGS=-lraylib -lm
+CFLAGS=-std=c99 -Wall -Wextra -O2 -D_POSIX_C_SOURCE=2 #-pg -ggdb
+LDFLAGS=-lraylib -lm #-pg -ggdb
 
 OFILES=pilka.o
 
