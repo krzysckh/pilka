@@ -221,6 +221,31 @@ draw_points(Board *b)
       draw_point(b, j, i);
 }
 
+void
+draw_board(Board *b)
+{
+  int i, j;
+  BeginDrawing();
+
+  ClearBackground(color_bg);
+  for (i = 0; i < H; ++i)
+    for (j = 0; j < W; ++j)
+      DrawCircle(j*PWIDTH, i*PHEIGHT, 2.f, color_fg);
+
+  draw_points(b);
+
+  DrawRectangle(0, 0, 3*PWIDTH, PHEIGHT, color_bg);
+  DrawRectangle(5*PWIDTH, 0, 3*PWIDTH, PHEIGHT, color_bg);
+  DrawRectangle(0, 11*PHEIGHT, 3*PWIDTH, PHEIGHT, color_bg);
+  DrawRectangle(5*PWIDTH, 11*PHEIGHT, 3*PWIDTH, PHEIGHT, color_bg);
+  DrawRectangle(8*PWIDTH, 0, PWIDTH, 12*PHEIGHT, color_bg);
+
+  DrawCircle(b->x*PWIDTH, b->y*PHEIGHT, 5.f, b->plr ? color_p2 : color_p1);
+
+  EndDrawing();
+}
+
+
 static uint8_t
 rmask(uint8_t mask)
 {
@@ -338,21 +363,20 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *mq)
 {
   float max = -1.f/0.f, score = 0;
   uint8_t moves[8], nm, i, best = 0, pwas = b->plr, *mqprim = alloca(absdepth);
-  Board *bc;
+  Board bc;
 
   nm = get_legal_moves(b, moves);
   best = moves[0];
   if (b->res != NONE || depth == 0 || absdepth == 0) return eval(b);
 
-  bc = malloc(sizeof(Board));
-
   for (i = 0; i < nm; ++i) {
-    memcpy(bc, b, sizeof(Board));
-    board_do_move(bc, moves[i], 1);
-    if (pwas == bc->plr)
-      score = 1.f * negamax(bc, absdepth-1, depth, alpha, beta, mqprim);
+    memcpy(&bc, b, sizeof(Board));
+    board_do_move(&bc, moves[i], 1);
+    /* draw_board(&bc); */
+    if (pwas == bc.plr)
+      score = 1.f * negamax(&bc, absdepth-1, depth, alpha, beta, mqprim);
     else
-      score = -1.f * negamax(bc, absdepth-1, depth-1, -beta, -alpha, NULL);
+      score = -1.f * negamax(&bc, absdepth-1, depth-1, -beta, -alpha, NULL);
     if (i == 0) /* copy first mq to have at least one possible scenario ready.
                    this is needed if a move will have lose the game */
       if (mq)
@@ -369,7 +393,6 @@ negamax(Board *b, int absdepth, int depth, float alpha, float beta, uint8_t *mq)
     if (score >= beta)
       break;
   }
-  free(bc);
 
   if (mq) *mq = best;
   /* printf("returning move: %d with score %f\n", *best_, max); */
@@ -556,8 +579,7 @@ usage(void)
 int
 main(int argc, char **argv)
 {
-  int i, j;
-  uint8_t xwas, ywas, tmp[8], nmoves = 0, Fflag = 60;
+  uint8_t Fflag = 60;
   char c;
   Board *b = malloc(sizeof(Board));
 
@@ -591,7 +613,6 @@ main(int argc, char **argv)
   SetTargetFPS(Fflag);
 
  beg:
-  xwas = 255, ywas = 255; /* not even on the board */
   if (argv[optind])
     load_board_from(b, argv[optind]);
   else {
@@ -600,27 +621,7 @@ main(int argc, char **argv)
   }
 
   while (!WindowShouldClose()) {
-    if (xwas != b->x || ywas != b->y)
-      nmoves = get_legal_moves(b, tmp), xwas = b->x, ywas = b->y;
-
-    BeginDrawing();
-
-    ClearBackground(color_bg);
-    for (i = 0; i < H; ++i)
-      for (j = 0; j < W; ++j)
-        DrawCircle(j*PWIDTH, i*PHEIGHT, 2.f, color_fg);
-
-    draw_points(b);
-
-    DrawRectangle(0, 0, 3*PWIDTH, PHEIGHT, color_bg);
-    DrawRectangle(5*PWIDTH, 0, 3*PWIDTH, PHEIGHT, color_bg);
-    DrawRectangle(0, 11*PHEIGHT, 3*PWIDTH, PHEIGHT, color_bg);
-    DrawRectangle(5*PWIDTH, 11*PHEIGHT, 3*PWIDTH, PHEIGHT, color_bg);
-    DrawRectangle(8*PWIDTH, 0, PWIDTH, 12*PHEIGHT, color_bg);
-
-    DrawText(TextFormat("Possible moves: %d", nmoves), 0, 0, 8, color_fg);
-
-    DrawCircle(b->x*PWIDTH, b->y*PHEIGHT, 5.f, b->plr ? color_p2 : color_p1);
+    draw_board(b);
 
     switch (mflag) {
     case PL_VS_BOT:
@@ -642,8 +643,6 @@ main(int argc, char **argv)
     default:
       errx(1, "Unknown mode: %d.", mflag);
     }
-
-    EndDrawing();
 
     if (IsKeyPressed(KEY_Q)) CloseWindow();
     if (IsKeyPressed(KEY_R)) goto beg;
