@@ -320,15 +320,16 @@ get_legal_moves(Board *b, uint8_t moves[8])
 static float
 eval(Board *b)
 {
+  float f = (mflag == BOT_VS_PL ? 12-b->y : b->y)*WHO(b);
   if (b->res != NONE) {
     if (b->res == b->plr)
-      return 1.f/0.f;
+      f += 2e10;
     else
-      return -1.f/0.f;
+      f -= 2e10;
   }
 
   /* TODO: add option for "defensive" bot. for f=0 it will just "not lose" */
-  return (mflag == BOT_VS_PL ? 12-b->y : b->y)*WHO(b);
+  return f;
 }
 
 /* requires *best to be 0 in the beginning */
